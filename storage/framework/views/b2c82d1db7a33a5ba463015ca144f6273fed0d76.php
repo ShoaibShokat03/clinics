@@ -1,0 +1,1 @@
+<?php /**PATH E:\dental\dental-main - 05-Feb-2026\resources\views/layouts/footer.blade.php ENDPATH**/ ?>

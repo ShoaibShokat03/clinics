@@ -1,0 +1,15 @@
+/vendor
+/node_modules
+/public/storage
+/storage/*.key
+.env
+.phpunit.result.cache
+
+/app/Components/firbase.json
+/app/Components/firebase.json
+firebase.json
+
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log

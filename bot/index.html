@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title id="pageTitle">Dental Care Manager - AI Assistant</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="./assets/css/style.css" />
+  </head>
+  <body>
+    <div class="chat-container">
+      <div class="chat-header">
+        <div class="header-controls">
+          <button
+            class="theme-toggle"
+            id="themeToggle"
+            title="Toggle dark/light mode"
+          >
+            <i class="fas fa-moon"></i>
+          </button>
+        </div>
+        <div>
+          <h2 id="headerTitle"><i class="fas fa-tooth me-2"></i>Dental Care Manager</h2>
+          <p id="headerSubtitle">AI-powered Healthcare Management Assistant</p>
+        </div>
+        <div style="width: 60px"></div>
+        <!-- Spacer for balance -->
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="message bot-message">
+          <div class="message-content">
+            <p id="welcomeMessage">
+              🦷 Welcome to Dental Care Manager! I can assist you with patient records,
+              appointments, prescriptions, treatment plans, invoices, and clinical analytics. 
+              How can I help you today?
+            </p>
+            <div class="timestamp" id="ts"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="voice-status" id="voiceStatus"></div>
+
+      <div class="suggestions-wrapper">
+        <button class="suggestions-toggle" id="suggestionsToggle">
+          <i class="fas fa-lightbulb"></i>
+          <span>Quick Questions</span>
+          <i class="fas fa-chevron-up toggle-icon"></i>
+        </button>
+        <div class="suggestions" id="suggestions">
+          <!-- Dynamic suggestions will be loaded here -->
+        </div>
+      </div>
+
+      <div class="chat-input">
+        <input
+          type="text"
+          maxlength="200"
+          id="questionInput"
+          placeholder="Ask about your data, reports, or system..."
+          autocomplete="off"
+        />
+        <button class="voice-record" id="voiceRecord" title="Voice input">
+          <i class="fas fa-microphone"></i>
+        </button>
+        <button type="button" id="sendButton">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="./assets/js/index.js"></script>
+    
+    <!-- Dynamic UI Configuration -->
+    <script>
+      let uiConfig = null;
+      let isLoadingUIConfig = false;
+
+      // Load dynamic UI configuration on page load
+      document.addEventListener('DOMContentLoaded', function() {
+        loadUIConfiguration();
+      });
+
+      async function loadUIConfiguration() {
+        if (isLoadingUIConfig) return;
+        
+        isLoadingUIConfig = true;
+        showUIConfigLoadingState();
+        
+        try {
+          const response = await fetch('ignitephp/api/ui/config');
+          const data = await response.json();
+          
+          if (data.status === 'success' && data.data) {
+            uiConfig = data.data;
+            applyUIConfiguration(uiConfig);
+            console.log('UI configuration loaded successfully:', uiConfig);
+          } else {
+            console.warn('UI configuration not available, using defaults');
+            showDefaultUI();
+          }
+        } catch (error) {
+          console.error('Error loading UI configuration:', error);
+          showDefaultUI();
+        } finally {
+          isLoadingUIConfig = false;
+          hideUIConfigLoadingState();
+        }
+      }
+
+      function showUIConfigLoadingState() {
+        // Show loading state for UI elements
+        document.getElementById('pageTitle').textContent = 'Loading... - AI Assistant';
+        document.getElementById('headerTitle').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+        document.getElementById('headerSubtitle').textContent = 'Initializing system...';
+        document.getElementById('welcomeMessage').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading configuration...';
+        document.getElementById('questionInput').placeholder = 'Loading...';
+        
+        // Show loading for suggestions
+        const suggestionsContainer = document.getElementById('suggestions');
+        suggestionsContainer.innerHTML = `
+          <div class="suggestion" style="opacity: 0.6; pointer-events: none;">
+            <i class="fas fa-spinner fa-spin"></i> Loading suggestions...
+          </div>
+        `;
+      }
+
+      function hideUIConfigLoadingState() {
+        // Loading state will be replaced by actual content
+      }
+
+      function applyUIConfiguration(config) {
+        // Update page title
+        if (config.page_title) {
+          document.getElementById('pageTitle').textContent = config.page_title;
+        }
+        
+        // Update header
+        if (config.header_title) {
+          document.getElementById('headerTitle').innerHTML = `<i class="${config.branding?.icon || 'fas fa-robot'} me-2"></i>${config.header_title}`;
+        }
+        
+        if (config.header_subtitle) {
+          document.getElementById('headerSubtitle').textContent = config.header_subtitle;
+        }
+        
+        // Update welcome message
+        if (config.welcome_message) {
+          document.getElementById('welcomeMessage').textContent = config.welcome_message;
+        }
+        
+        // Update placeholder text
+        if (config.placeholder_text) {
+          document.getElementById('questionInput').placeholder = config.placeholder_text;
+        }
+        
+        // Update quick suggestions
+        if (config.quick_suggestions && config.quick_suggestions.length > 0) {
+          const suggestionsContainer = document.getElementById('suggestions');
+          let suggestionsHtml = '';
+          
+          config.quick_suggestions.forEach(suggestion => {
+            suggestionsHtml += `
+              <div class="suggestion" data-question="${suggestion.question}">
+                <i class="${suggestion.icon}"></i> ${suggestion.text}
+              </div>
+            `;
+          });
+          
+          suggestionsContainer.innerHTML = suggestionsHtml;
+          
+          // Re-attach click events to new suggestions
+          attachSuggestionClickEvents();
+        }
+        
+        // Update CSS variables for branding
+        if (config.branding) {
+          const root = document.documentElement;
+          if (config.branding.primary_color) {
+            root.style.setProperty('--primary', config.branding.primary_color);
+          }
+          if (config.branding.secondary_color) {
+            root.style.setProperty('--secondary', config.branding.secondary_color);
+          }
+          if (config.branding.accent_color) {
+            root.style.setProperty('--accent', config.branding.accent_color);
+          }
+        }
+      }
+
+      function showDefaultUI() {
+        // Apply default UI configuration
+        const defaultConfig = {
+          page_title: 'AI Assistant - Management System',
+          header_title: 'AI Assistant',
+          header_subtitle: 'Intelligent Management Assistant',
+          welcome_message: '🤖 Welcome to your AI Assistant! I can help you manage your data, generate reports, and answer questions about your system. How can I assist you today?',
+          placeholder_text: 'Ask about your data, reports, or system...',
+          branding: {
+            primary_color: '#3B82F6',
+            secondary_color: '#8B92A5',
+            accent_color: '#6B7280',
+            icon: 'fas fa-robot'
+          },
+          quick_suggestions: [
+            {
+              text: 'Show All Records',
+              question: 'Show all records',
+              icon: 'fas fa-list'
+            },
+            {
+              text: 'Recent Entries',
+              question: 'Show recent entries',
+              icon: 'fas fa-clock'
+            },
+            {
+              text: 'Data Summary',
+              question: 'Show data summary',
+              icon: 'fas fa-chart-bar'
+            },
+            {
+              text: 'System Status',
+              question: 'Show system status',
+              icon: 'fas fa-info-circle'
+            }
+          ]
+        };
+        
+        applyUIConfiguration(defaultConfig);
+        
+        // Attach click events to default suggestions
+        attachSuggestionClickEvents();
+      }
+
+      // Function to reload UI configuration (can be called from console or admin)
+      window.reloadUIConfig = function() {
+        loadUIConfiguration();
+      };
+
+      // Function to regenerate UI configuration
+      window.regenerateUIConfig = async function() {
+        if (isLoadingUIConfig) return;
+        
+        isLoadingUIConfig = true;
+        showUIConfigLoadingState();
+        
+        try {
+          const response = await fetch('ignitephp/api/ui/regenerate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          const data = await response.json();
+          
+          if (data.status === 'success' && data.data) {
+            uiConfig = data.data;
+            applyUIConfiguration(uiConfig);
+            console.log('UI configuration regenerated successfully:', uiConfig);
+          } else {
+            console.error('Failed to regenerate UI configuration:', data.message);
+            showDefaultUI();
+          }
+        } catch (error) {
+          console.error('Error regenerating UI configuration:', error);
+          showDefaultUI();
+        } finally {
+          isLoadingUIConfig = false;
+          hideUIConfigLoadingState();
+        }
+      };
+
+      // Function to attach click events to suggestions
+      function attachSuggestionClickEvents() {
+        const suggestions = document.querySelectorAll('.suggestion');
+        const questionInput = document.getElementById('questionInput');
+        const suggestionsContainer = document.getElementById('suggestions');
+        const suggestionsToggle = document.getElementById('suggestionsToggle');
+        
+        suggestions.forEach(suggestion => {
+          suggestion.addEventListener('click', function() {
+            const question = this.getAttribute('data-question');
+            if (question && questionInput) {
+              questionInput.value = question;
+              
+              // Auto-collapse suggestions on mobile after selection
+              if (window.innerWidth <= 768 && suggestionsContainer) {
+                suggestionsContainer.classList.remove('expanded');
+                if (suggestionsToggle) {
+                  suggestionsToggle.classList.add('collapsed');
+                }
+              }
+              
+              // Trigger send message if the function exists
+              if (window.sendMessage) {
+                window.sendMessage();
+              } else {
+                // Fallback: trigger the send button click
+                const sendButton = document.getElementById('sendButton');
+                if (sendButton) {
+                  sendButton.click();
+                }
+              }
+            }
+          });
+        });
+      }
+    </script>
+  </body>
+</html>
